@@ -47,11 +47,14 @@ CREATE INDEX IF NOT EXISTS idx_posts_sub_created ON posts (subreddit, created_ut
 class Store:
     """DuckDB-backed post store. Pass db_path=":memory:" or a tmp path for tests."""
 
-    def __init__(self, db_path: str | Path = DB_PATH):
+    def __init__(self, db_path: str | Path = DB_PATH, read_only: bool = False):
+        """read_only=True lets many processes share the db (duckdb allows
+        either one writer or N readers) — every command except ingest wants it."""
         if str(db_path) != ":memory:":
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        self.con = duckdb.connect(str(db_path))
-        self.con.execute(_SCHEMA)
+        self.con = duckdb.connect(str(db_path), read_only=read_only)
+        if not read_only:
+            self.con.execute(_SCHEMA)
 
     def ingest_raw(self, raws: Iterable[dict[str, Any]]) -> dict[str, int]:
         """Normalize and upsert raw archive dicts; returns per-label counts + total."""

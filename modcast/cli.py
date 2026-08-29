@@ -31,7 +31,7 @@ def index() -> None:
     from modcast.retrieval import TfidfRetriever
     from modcast.stats import _iso_to_epoch  # shared epoch conversion
 
-    store = Store()
+    store = Store(read_only=True)
     for sub in config.SUBREDDITS:
         w = config.index_window(sub)
         start = _iso_to_epoch(w[0])
@@ -63,7 +63,7 @@ def induce(
     from modcast.induce import induce as run_induce
     from modcast.llm import new_run_id
 
-    store = Store()
+    store = Store(read_only=True)
     run_id = new_run_id("induce")
     for s in sub or config.SUBREDDITS:
         res = run_induce(store.con, s, run_id=run_id, model=model, effort=effort)
@@ -89,7 +89,7 @@ def eval(
     from modcast.baselines import BaseRatePredictor, LogisticPredictor
     from modcast.calibrate import CalibratedPredictor
 
-    store = Store()
+    store = Store(read_only=True)
     train, test = E.build_split(store.con)
     typer.echo(f"train={len(train)} test={len(test)}")
 
@@ -141,7 +141,7 @@ def predict(
     from modcast.schema import PostRecord, normalize
     from modcast.subrules import rules_digest
 
-    store = Store()
+    store = Store(read_only=True)
     if post_id:
         raw_row = store.query("SELECT * FROM posts WHERE id = ?", [post_id]).df()
         if raw_row.empty:
