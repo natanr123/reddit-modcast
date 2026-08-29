@@ -23,6 +23,7 @@ class Dossier:
     record: PostRecord
     base_rate: dict[str, Any]
     neighbors: list[dict[str, Any]]          # hydrated: + title, label, snippet
+    removed_contrast: list[dict[str, Any]]   # nearest REMOVED posts (contrast only, not stats)
     neighbor_summary: dict[str, Any]
     feature_values: dict[str, Any]
     rulebook: str                            # induced rulebook markdown ("" if absent)
@@ -53,6 +54,11 @@ class Dossier:
                 f"- id={nb['id']} sim={nb['score']:.2f} label={nb['label']} "
                 f"title={nb['title'][:120]!r}"
             )
+        if self.removed_contrast:
+            lines += ["", "## Nearest REMOVED precedents (contrast only — retrieved separately; "
+                          "the neighbor statistics above are the unbiased sample)"]
+            for nb in self.removed_contrast:
+                lines.append(f"- id={nb['id']} sim={nb['score']:.2f} title={nb['title'][:120]!r}")
         if self.rulebook:
             lines += ["", "## Induced rulebook (statistically verified on this subreddit)", self.rulebook]
         lines += ["", "## Published subreddit rules", self.published_rules]
@@ -71,19 +77,29 @@ def build(
     # window matters: regime-shifted subs (config.SUB_INDEX_START) must not
     # quote a base rate contaminated by a dead moderation regime
     base = S.removal_rate(con, record.subreddit, window=window)
-    hits = retriever.query(
-        f"{record.title}\n\n{record.selftext}", k=k, before_utc=record.created_utc
+    wide = retriever.query(
+        f"{record.title}\n\n{record.selftext}", k=max(200, k), before_utc=record.created_utc
     )
-    hydrated = []
-    for h in hits[:10]:
-        row = con.execute(
-            "SELECT title, substr(selftext, 1, 200) FROM posts WHERE id = ?", [h["id"]]
-        ).fetchone()
-        hydrated.append({**h, "title": row[0] if row else "", "body": row[1] if row else ""})
+    hits = wide[:k]  # the unbiased statistical sample
+
+    def _hydrate(items):
+        out = []
+        for h in items:
+            row = con.execute(
+                "SELECT title, substr(selftext, 1, 200) FROM posts WHERE id = ?", [h["id"]]
+            ).fetchone()
+            out.append({**h, "title": row[0] if row else "", "body": row[1] if row else ""})
+        return out
+
+    hydrated = _hydrate(hits[:10])
+    # contrast: nearest removed posts from the wider pool, excluding ones already shown
+    shown = {h["id"] for h in hits[:10]}
+    contrast = _hydrate([h for h in wide if h["label"] == "removed_mod" and h["id"] not in shown][:3])
     return Dossier(
         record=record,
         base_rate=base,
         neighbors=hydrated,
+        removed_contrast=contrast,
         neighbor_summary=neighbor_stats(hits),
         feature_values=F.extract(record),
         rulebook=rulebook,

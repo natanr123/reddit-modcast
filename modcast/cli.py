@@ -48,13 +48,14 @@ def interactive() -> None:
                 body_lines: list[str] = []
                 while (line := input()) != "":
                     body_lines.append(line)
-                predict(sub=sub, title=title, body="\n".join(body_lines), body_file=None,
-                        post_id=None, url=None, model=None, effort=None)
+                flair = typer.prompt("Flair you will select (Enter for none)", default="").strip() or None
+                _predict_or_offer_onboard(sub=sub, title=title, body="\n".join(body_lines),
+                        body_file=None, flair=flair, post_id=None, url=None, model=None, effort=None)
             elif choice == "2":
-                predict(sub=None, title=None, body="", body_file=None, post_id=None,
-                        url=typer.prompt("Reddit post URL").strip(), model=None, effort=None)
+                _predict_or_offer_onboard(sub=None, title=None, body="", body_file=None, flair=None,
+                        post_id=None, url=typer.prompt("Reddit post URL").strip(), model=None, effort=None)
             elif choice == "3":
-                predict(sub=None, title=None, body="", body_file=None,
+                _predict_or_offer_onboard(sub=None, title=None, body="", body_file=None, flair=None,
                         post_id=typer.prompt("Post id (base36)").strip(), url=None,
                         model=None, effort=None)
             elif choice in ("4", "q", "quit", "exit"):
@@ -65,6 +66,82 @@ def interactive() -> None:
             raise
         except (typer.BadParameter, Exception) as e:  # keep the loop alive on errors
             typer.secho(f"error: {e}", fg="red")
+
+
+@app.command()
+def onboard(
+    sub: str = typer.Argument(..., help="Subreddit to onboard (without r/)"),
+    days: int = typer.Option(90, help="How much history to fetch"),
+) -> None:
+    """Onboard a new subreddit: fetch labeled history, ingest, build its index.
+
+    Posts newer than 48h are skipped (their second-pass removal labels are not
+    mature yet). Accuracy on onboarded subs is NOT covered by the measured
+    eval — that covers the four curated subreddits.
+    """
+    import time as _t
+
+    from modcast.fetch import ArcticShiftClient
+    from modcast.retrieval import TfidfRetriever
+    from modcast.subrules import rules_digest
+
+    sub = sub.strip().removeprefix("r/")
+    now = int(_t.time())
+    start, end = now - days * 86400, now - 48 * 3600
+    typer.echo(f"[1/4] fetching r/{sub} ({days} days of history, this can take a few minutes)…")
+    client = ArcticShiftClient()
+    try:
+        chunk, total = 15 * 86400, 0
+        cur = start
+        while cur < end:
+            total += client.fetch_window(sub, cur, min(cur + chunk, end))
+            cur += chunk
+            typer.echo(f"    …{total} posts so far")
+    finally:
+        client.close()
+    typer.echo(f"[2/4] ingesting…")
+    store = Store()  # the one writer; closed before anything else reads
+    counts = store.ingest_jsonl_gz(config.RAW_DIR / f"{sub}.jsonl.gz")
+    store.close()
+    typer.echo(f"    {counts}")
+    typer.echo("[3/4] building retrieval index…")
+    ro = Store(read_only=True)
+    df = ro.query(
+        "SELECT id, title || chr(10) || chr(10) || selftext AS text, created_utc, label"
+        " FROM posts WHERE subreddit = ? AND label IN ('survived','removed_mod') AND text_available"
+        " ORDER BY id",
+        [sub],
+    ).df()
+    n_removed = int((df["label"] == "removed_mod").sum())
+    if len(df) < 100 or n_removed < 20:
+        typer.secho(f"    warning: thin corpus ({len(df)} usable posts, {n_removed} removals) — "
+                    f"forecasts will be weak; consider --days {days * 2}", fg="yellow")
+    TfidfRetriever().fit(df).save(config.DATA_DIR / "index" / f"{sub}.joblib")
+    ro.close()
+    typer.echo("[4/4] caching published rules…")
+    rules_digest(sub)
+    rate = n_removed / len(df) if len(df) else 0
+    typer.secho(f"r/{sub} onboarded: {len(df)} posts indexed, removal rate {rate:.0%}. "
+                f"Note: accuracy on onboarded subs is not covered by the published eval.", fg="green")
+
+
+def _predict_or_offer_onboard(**kwargs) -> None:
+    """Interactive helper: on 'not in corpus', offer to onboard and retry once."""
+    import re as _re
+
+    try:
+        predict(**kwargs)
+    except typer.BadParameter as e:
+        m = _re.search(r"r/(\w+) is not in ModCast's corpus", str(e))
+        if not m:
+            raise
+        sub = m.group(1)
+        if typer.confirm(f"r/{sub} isn't onboarded yet. Fetch its history and onboard now (~2-5 min)?",
+                         default=True):
+            onboard(sub=sub, days=90)
+            predict(**kwargs)
+        else:
+            typer.echo("Skipped.")
 
 
 @app.command()
@@ -183,6 +260,7 @@ def predict(
     title: str = typer.Option(None),
     body: str = typer.Option("", help="Post body (or use --body-file)"),
     body_file: Path = typer.Option(None),
+    flair: str = typer.Option(None, help="Link flair you will select when posting (e.g. 'Personal Project')"),
     post_id: str = typer.Option(None, help="Forecast a real archived post instead"),
     url: str = typer.Option(None, help="Reddit post URL — fetches title/body/subreddit automatically"),
     model: str = typer.Option(None),
@@ -224,10 +302,11 @@ def predict(
         record = normalize({
             "id": f"draft-{int(time.time())}", "subreddit": sub,
             "created_utc": int(time.time()), "title": title, "selftext": body,
-            "is_self": True,
+            "is_self": True, "link_flair_text": flair,
         })
     index_path = config.DATA_DIR / "index" / f"{sub}.joblib"
     if not index_path.exists():
+        store.close()  # free the read handle so an in-process onboard can write
         known = ", ".join(config.SUBREDDITS)
         raise typer.BadParameter(
             f"r/{sub} is not in ModCast's corpus yet (available: {known}). "

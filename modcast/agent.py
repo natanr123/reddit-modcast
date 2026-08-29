@@ -190,6 +190,7 @@ class Forecast:
     output_tokens: int
     raw_submission: dict = field(default_factory=dict)
     neighbors: list[dict] = field(default_factory=list)  # dossier's hydrated similar posts
+    removed_contrast: list[dict] = field(default_factory=list)
     neighbor_summary: dict = field(default_factory=dict)     # {k, removed, rate} over all retrieved
 
 
@@ -313,5 +314,6 @@ def forecast(
         output_tokens=session.total_output_tokens,
         raw_submission={k: v for k, v in submission.items() if not k.startswith("_")},
         neighbors=dossier.neighbors,
+        removed_contrast=dossier.removed_contrast,
         neighbor_summary=dossier.neighbor_summary,
     )

@@ -125,6 +125,15 @@ def render(record: PostRecord, fc: Forecast, base_rate: float | None = None) -> 
             lines.append(_row((f"{nb['score']:.0%}", fate, when, nb["id"],
                                _cell(nb.get("title", ""), TITLE_CHARS),
                                _cell(nb.get("body", ""), BODY_CHARS))))
+        if fc.removed_contrast and sum(1 for nb in fc.neighbors[:NEIGHBORS_SHOWN]
+                                        if nb["label"] == "removed_mod") < 2:
+            lines += ["", "### Nearest removed posts (for contrast — not part of the statistics)", ""]
+            lines += [_row(headers), _row(tuple("-" * w for w in widths))]
+            for nb in fc.removed_contrast:
+                when = time.strftime("%Y-%m", time.gmtime(nb["created_utc"]))
+                lines.append(_row((f"{nb['score']:.0%}", "removed", when, nb["id"],
+                                   _cell(nb.get("title", ""), TITLE_CHARS),
+                                   _cell(nb.get("body", ""), BODY_CHARS))))
         ns = fc.neighbor_summary
         if ns.get("k", 0) > len(fc.neighbors[:NEIGHBORS_SHOWN]) and ns.get("rate") is not None:
             lines.append(f"\n_showing {min(len(fc.neighbors), NEIGHBORS_SHOWN)} of {ns['k']} retrieved; "
