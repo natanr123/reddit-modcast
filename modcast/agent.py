@@ -207,7 +207,7 @@ def forecast(
     rulebook: str = "",
     published_rules: str = "",
     model: str | None = None,
-    effort: str = "high",
+    effort: str | None = None,
 ) -> Forecast:
     dossier: Dossier = build_dossier(
         ctx.con, ctx.retriever, record, rulebook=rulebook, published_rules=published_rules

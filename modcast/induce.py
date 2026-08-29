@@ -117,7 +117,7 @@ def induce(
     subreddit: str,
     run_id: str,
     model: str | None = None,
-    effort: str = "high",
+    effort: str | None = None,
     max_turns: int = 20,
 ) -> InductionResult:
     window = index_window(subreddit)

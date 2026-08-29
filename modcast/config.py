@@ -69,6 +69,16 @@ SUB_INDEX_START: dict[str, str] = {"AmItheAsshole": "2026-07-01"}
 def index_window(subreddit: str) -> tuple[str, str]:
     return (SUB_INDEX_START.get(subreddit, INDEX_START), INDEX_END)
 
+# LLM backend selection. `.env`: LLM_MODEL=<backend> <model> <effort>
+#   codex-cli gpt-5.6-sol medium   -> flat-rate codex CLI (free test iterations)
+#   anthropic claude-opus-5 high   -> metered API (judge default when unset)
+_llm_parts = os.environ.get("LLM_MODEL", "").split()
+LLM_BACKEND = _llm_parts[0] if _llm_parts else "anthropic"
+LLM_MODEL_NAME = (
+    _llm_parts[1] if len(_llm_parts) > 1 else os.environ.get("MODCAST_MODEL", "claude-opus-5")
+)
+LLM_EFFORT = _llm_parts[2] if len(_llm_parts) > 2 else "high"
+
 # Evaluation
 EVAL_POSTS_PER_SUB = 250          # sampled from the test window per subreddit
 LLM_EVAL_POSTS_PER_SUB = 60       # seeded subsample of the above for LLM predictors

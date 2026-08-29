@@ -15,6 +15,8 @@ PRICES: dict[str, tuple[float, float, float, float]] = {
 
 
 def _price(model: str) -> tuple[float, float, float, float]:
+    if model.startswith("codex"):
+        return (0.0, 0.0, 0.0, 0.0)  # flat-rate subscription
     for key, p in PRICES.items():
         if model.startswith(key):
             return p

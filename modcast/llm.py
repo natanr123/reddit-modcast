@@ -16,28 +16,37 @@ from typing import Any
 
 import anthropic
 
-from modcast.config import RESULTS_DIR
+from modcast.config import RESULTS_DIR, LLM_BACKEND, LLM_EFFORT, LLM_MODEL_NAME
 
-DEFAULT_MODEL = os.environ.get("MODCAST_MODEL", "claude-opus-5")
+DEFAULT_MODEL = LLM_MODEL_NAME
 TRAJ_DIR = RESULTS_DIR / "trajectories"
 
 
 @dataclass
 class LLMSession:
-    """One logical conversation with the model, logged to a JSONL trajectory."""
+    """One logical conversation with the model, logged to a JSONL trajectory.
+
+    `backend` picks the engine: "anthropic" (metered API) or "codex-cli"
+    (flat-rate `codex exec` emulating the same tool-use surface). Defaults
+    come from LLM_MODEL in .env; see modcast.config.
+    """
 
     run_id: str
     name: str
     model: str = DEFAULT_MODEL
-    effort: str = "high"
+    effort: str | None = None          # None -> LLM_EFFORT from config
     system: str | None = None
     tools: list[dict] = field(default_factory=list)
     messages: list[dict] = field(default_factory=list)
+    backend: str = LLM_BACKEND
     total_input_tokens: int = 0
     total_output_tokens: int = 0
 
     def __post_init__(self) -> None:
-        self.client = anthropic.Anthropic()
+        if self.effort is None:
+            self.effort = LLM_EFFORT
+        if self.backend == "anthropic":
+            self.client = anthropic.Anthropic()
         self._traj_path = TRAJ_DIR / self.run_id / f"{self.name}.jsonl"
         self._traj_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -53,26 +62,34 @@ class LLMSession:
         user_content: Any | None = None,
         max_tokens: int = 16000,
         output_format: dict | None = None,
-    ) -> anthropic.types.Message:
-        """Append optional user content and run one model turn."""
+    ):
+        """Append optional user content and run one model turn (any backend)."""
         if user_content is not None:
             self.messages.append({"role": "user", "content": user_content})
             self._log("user", user_content)
-        output_config: dict[str, Any] = {"effort": self.effort}
-        if output_format is not None:
-            output_config["format"] = output_format
-        kwargs: dict[str, Any] = dict(
-            model=self.model,
-            max_tokens=max_tokens,
-            messages=self.messages,
-            output_config=output_config,
-            cache_control={"type": "ephemeral"},  # auto-cache: tool loops resend history every turn
-        )
-        if self.system:
-            kwargs["system"] = self.system
-        if self.tools:
-            kwargs["tools"] = self.tools
-        response = self._create_with_retry(**kwargs)
+        if self.backend == "codex-cli":
+            from modcast import codex_backend
+
+            response = codex_backend.complete(
+                system=self.system, tools=self.tools, messages=self.messages,
+                model=self.model, effort=self.effort, output_format=output_format,
+            )
+        else:
+            output_config: dict[str, Any] = {"effort": self.effort}
+            if output_format is not None:
+                output_config["format"] = output_format
+            kwargs: dict[str, Any] = dict(
+                model=self.model,
+                max_tokens=max_tokens,
+                messages=self.messages,
+                output_config=output_config,
+                cache_control={"type": "ephemeral"},  # auto-cache: tool loops resend history every turn
+            )
+            if self.system:
+                kwargs["system"] = self.system
+            if self.tools:
+                kwargs["tools"] = self.tools
+            response = self._create_with_retry(**kwargs)
         u = response.usage
         self.total_input_tokens += u.input_tokens
         self.total_output_tokens += u.output_tokens
@@ -116,9 +133,9 @@ def new_run_id(prefix: str) -> str:
     return f"{prefix}-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
 
 
-def text_of(response: anthropic.types.Message) -> str:
+def text_of(response) -> str:
     return "".join(b.text for b in response.content if b.type == "text")
 
 
-def tool_uses(response: anthropic.types.Message) -> list[Any]:
+def tool_uses(response) -> list[Any]:
     return [b for b in response.content if b.type == "tool_use"]

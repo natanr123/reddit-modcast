@@ -57,7 +57,7 @@ def index() -> None:
 def induce(
     sub: list[str] = typer.Option(None, help="Subreddits (default: all configured)"),
     model: str = typer.Option(None),
-    effort: str = typer.Option("high"),
+    effort: str = typer.Option(None, help="Reasoning effort; default from .env LLM_MODEL"),
 ) -> None:
     """Induce a verified rulebook per subreddit (writes rulebooks/{sub}.md)."""
     from modcast.induce import induce as run_induce
@@ -80,7 +80,7 @@ def eval(
     with_llm: bool = typer.Option(False, help="Also evaluate LLM one-shot + agent on the seeded subsample"),
     llm_posts: int = typer.Option(config.LLM_EVAL_POSTS_PER_SUB, help="LLM subsample size per subreddit"),
     model: str = typer.Option(None),
-    effort: str = typer.Option("high"),
+    effort: str = typer.Option(None, help="Reasoning effort; default from .env LLM_MODEL"),
     no_rulebook: bool = typer.Option(False, help="Ablation: run the agent without rulebooks"),
 ) -> None:
     """Run the harness. Cheap predictors on the full test set; LLM predictors
@@ -129,7 +129,7 @@ def predict(
     body_file: Path = typer.Option(None),
     post_id: str = typer.Option(None, help="Forecast a real archived post instead"),
     model: str = typer.Option(None),
-    effort: str = typer.Option("high"),
+    effort: str = typer.Option(None, help="Reasoning effort; default from .env LLM_MODEL"),
 ) -> None:
     """Preflight one post: probability + verified risk factors + fixes."""
     from modcast import agent as A

@@ -47,7 +47,7 @@ class OneShotPredictor:
 
     def _one(self, r: PostRecord) -> float:
         session = LLMSession(
-            run_id=self.run_id, name=f"oneshot-{r.id}", effort="high",
+            run_id=self.run_id, name=f"oneshot-{r.id}",
             **({"model": self.model} if self.model else {}),
         )
         prompt = (
@@ -79,7 +79,7 @@ class AgentPredictor:
         con: duckdb.DuckDBPyConnection,
         run_id: str,
         model: str | None = None,
-        effort: str = "high",
+        effort: str | None = None,
         use_rulebook: bool = True,   # ablation switch for the changelog
     ):
         self.con = con
