@@ -235,11 +235,17 @@ def forecast(
     published_rules: str = "",
     model: str | None = None,
     effort: str | None = None,
+    progress=None,
 ) -> Forecast:
+    say = progress or (lambda m: None)
     dossier: Dossier = build_dossier(
         ctx.con, ctx.retriever, record, rulebook=rulebook,
         published_rules=published_rules, window=ctx.window,
     )
+    ns = dossier.neighbor_summary
+    say(f"evidence dossier: base rate {dossier.base_rate['rate']:.0%}, "
+        f"{ns['k']} similar posts retrieved"
+        + (f" ({ns['rate']:.0%} of them removed)" if ns.get("rate") is not None else ""))
     session = LLMSession(
         run_id=run_id,
         name=f"forecast-{record.id}",
@@ -248,6 +254,7 @@ def forecast(
         effort=effort,
         **({"model": model} if model else {}),
     )
+    say("agent thinking (turn 1)…")
     response = session.step(dossier.to_prompt())
     submission: dict | None = None
     repair_rounds = 0
@@ -263,9 +270,11 @@ def forecast(
         results = []
         for call in calls:
             if call.name == "submit_forecast":
+                say("verifying cited evidence…")
                 submission = call.input
                 verified, rejected = verifier.verify_factors(ctx.con, submission.get("risk_factors", []), subreddit=ctx.subreddit, window=ctx.window)
                 if rejected and repair_rounds == 0:
+                    say(f"citation check FAILED for {len(rejected)} factor(s) — asking the agent to repair")
                     repair_rounds += 1
                     submission = None
                     results.append({
@@ -277,6 +286,8 @@ def forecast(
                         "is_error": True,
                     })
                 else:
+                    say(f"forecast accepted: {len(verified)} factor(s) verified"
+                        + (f", {len(rejected)} dropped" if rejected else ""))
                     submission = {**submission, "_verified": verified, "_rejected": rejected}
                     results.append({
                         "type": "tool_result",
@@ -284,6 +295,12 @@ def forecast(
                         "content": "forecast accepted",
                     })
             else:
+                if call.name in ("query_removal_rate", "compare_removal_rate"):
+                    say(f"testing: {call.input.get('reason', call.input.get('where_sql', ''))}")
+                elif call.name == "read_post":
+                    say(f"reading precedent {call.input.get('post_id', '')}")
+                elif call.name == "find_similar_posts":
+                    say("searching for similar posts")
                 content, is_err = _execute_tool(ctx, call.name, call.input)
                 results.append({
                     "type": "tool_result",
@@ -294,6 +311,7 @@ def forecast(
         session.tool_results(results)
         if submission is not None:
             break
+        say(f"agent thinking (turn {turn + 2})…")
         response = session.step()
 
     if submission is None:  # ran out of turns or refusal: fall back to neighbor evidence

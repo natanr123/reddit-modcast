@@ -52,6 +52,11 @@ class Store:
         either one writer or N readers) — every command except ingest wants it."""
         if str(db_path) != ":memory:":
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+            if read_only and not Path(db_path).exists():
+                # first run: create an empty db so read-only commands can open it
+                boot = duckdb.connect(str(db_path))
+                boot.execute(_SCHEMA)
+                boot.close()
         self.con = duckdb.connect(str(db_path), read_only=read_only)
         if not read_only:
             self.con.execute(_SCHEMA)

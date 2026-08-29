@@ -41,7 +41,8 @@ def interactive() -> None:
         try:
             if choice == "1":
                 subs = _available_subs()
-                typer.echo(f"Available subreddits: {', '.join(subs)}")
+                typer.echo("Available subreddits: " + (", ".join(subs) if subs else
+                           "(none yet — name any subreddit and I'll offer to onboard it)"))
                 sub = typer.prompt("Subreddit").strip().removeprefix("r/")
                 title = typer.prompt("Title")
                 typer.echo("Body (finish with an empty line):")
@@ -112,6 +113,10 @@ def onboard(
         " ORDER BY id",
         [sub],
     ).df()
+    if df.empty:
+        ro.close()
+        raise typer.BadParameter(
+            f"no posts found for r/{sub} — check the name (archive had nothing to fetch)")
     n_removed = int((df["label"] == "removed_mod").sum())
     if len(df) < 100 or n_removed < 20:
         typer.secho(f"    warning: thin corpus ({len(df)} usable posts, {n_removed} removals) — "
@@ -327,6 +332,7 @@ def predict(
     fc = A.forecast(
         ctx, record, run_id=run_id, rulebook="",
         published_rules=rules_digest(sub), model=model, effort=effort,
+        progress=lambda m: typer.secho(f"  ⋯ {m}", dim=True),
     )
     base = S.removal_rate(store.con, sub, window=ctx.window)["rate"]
     text = render(record, fc, base_rate=base)
