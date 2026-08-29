@@ -18,12 +18,12 @@ from modcast import agent as A
 from modcast import config
 from modcast.config import RULEBOOK_DIR, DATA_DIR, RESULTS_DIR, index_window
 from modcast.llm import LLMSession, text_of
-from modcast.retrieval import TfidfRetriever
+from modcast.retrieval import TfidfRetriever, load_retriever
 from modcast.schema import PostRecord
 from modcast.subrules import rules_digest
 
 CONCURRENCY = int(os.environ.get("MODCAST_CONCURRENCY", "4"))
-CACHE_VERSION = "d2"  # bump when forecast-affecting code outside SYSTEM/TOOLS changes (e.g. dossier)
+CACHE_VERSION = "d2" + config.RETRIEVER_KIND[0]  # d2t / d2d: retriever kind is forecast-affecting  # bump when forecast-affecting code outside SYSTEM/TOOLS changes (e.g. dossier)
 
 
 class PredictionCache:
@@ -118,15 +118,15 @@ class AgentPredictor:
         run_id: str,
         model: str | None = None,
         effort: str | None = None,
-        use_rulebook: bool = True,   # ablation switch for the changelog
+        use_rulebook: bool = False,  # rulebooks measured HARMFUL for forecasting (see changelog)
     ):
         self.con = con
         self.run_id = run_id
         self.model = model
         self.effort = effort
         self.use_rulebook = use_rulebook
-        if not use_rulebook:
-            self.name = "modcast_agent_norulebook"  # distinct report/cache key
+        if use_rulebook:
+            self.name = "modcast_agent_rulebook"  # the ablation arm
         # hash the agent's system prompt into the cache key: editing the prompt
         # automatically invalidates stale forecasts instead of silently mixing versions
         prompt_hash = CACHE_VERSION + hashlib.sha1((A.SYSTEM + json.dumps(A.TOOLS, sort_keys=True)).encode()).hexdigest()[:8]
@@ -136,7 +136,7 @@ class AgentPredictor:
 
     def _sub_assets(self, subreddit: str) -> tuple[TfidfRetriever, str, str]:
         if subreddit not in self._sub_cache:
-            retriever = TfidfRetriever.load(DATA_DIR / "index" / f"{subreddit}.joblib")
+            retriever = load_retriever(subreddit)
             rb_path = RULEBOOK_DIR / f"{subreddit}.md"
             rulebook = rb_path.read_text() if (self.use_rulebook and rb_path.exists()) else ""
             self._sub_cache[subreddit] = (retriever, rulebook, rules_digest(subreddit))

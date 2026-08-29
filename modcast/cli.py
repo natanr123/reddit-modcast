@@ -78,9 +78,9 @@ def ingest() -> None:
 
 
 @app.command()
-def index() -> None:
-    """Build one TF-IDF retriever per subreddit over the index window."""
-    from modcast.retrieval import TfidfRetriever
+def index(dense: bool = typer.Option(False, help="Also build the dense-embedding index (needs [embed] extra)")) -> None:
+    """Build one retriever per subreddit over the index window (TF-IDF; --dense adds embeddings)."""
+    from modcast.retrieval import DenseRetriever, TfidfRetriever
     from modcast.stats import _iso_to_epoch  # shared epoch conversion
 
     store = Store(read_only=True)
@@ -103,6 +103,9 @@ def index() -> None:
             continue
         path = TfidfRetriever().fit(df).save(config.DATA_DIR / "index" / f"{sub}.joblib")
         typer.echo(f"{sub}: indexed {len(df)} posts -> {path}")
+        if dense:
+            dpath = DenseRetriever().fit(df).save(config.DATA_DIR / "index" / f"{sub}.dense.npz")
+            typer.echo(f"{sub}: dense index -> {dpath}")
 
 
 @app.command()
@@ -133,7 +136,7 @@ def eval(
     llm_posts: int = typer.Option(config.LLM_EVAL_POSTS_PER_SUB, help="LLM subsample size per subreddit"),
     model: str = typer.Option(None),
     effort: str = typer.Option(None, help="Reasoning effort; default from .env LLM_MODEL"),
-    no_rulebook: bool = typer.Option(False, help="Ablation: run the agent without rulebooks"),
+    rulebook: bool = typer.Option(False, help="Ablation: include induced rulebooks (measured harmful for forecasting)"),
 ) -> None:
     """Run the harness. Cheap predictors on the full test set; LLM predictors
     (and the cheap ones again, for same-case comparison) on the subsample."""
@@ -162,9 +165,9 @@ def eval(
         run_id = new_run_id("eval")
         typer.echo(f"LLM eval on {len(subsample)} posts, run_id={run_id}")
         agent = AgentPredictor(store.con, run_id=run_id, model=model, effort=effort,
-                               use_rulebook=not no_rulebook)
+                               use_rulebook=rulebook)
         preds = cheap + [OneShotPredictor(run_id=run_id, model=model), agent]
-        out_dir = config.RESULTS_DIR / ("llm_norulebook" if no_rulebook else "llm")
+        out_dir = config.RESULTS_DIR / ("llm_rulebook" if rulebook else "llm")
         report = E.run_eval(preds, train, subsample, out_dir=out_dir)
         typer.echo(json.dumps({k: v["overall"] for k, v in report["predictors"].items()}, indent=1))
         spend = {"input_tokens": sum(f.input_tokens for f in agent.forecasts.values()),
@@ -190,7 +193,7 @@ def predict(
     from modcast import stats as S
     from modcast.llm import new_run_id
     from modcast.report import render
-    from modcast.retrieval import TfidfRetriever
+    from modcast.retrieval import load_retriever
     from modcast.schema import PostRecord, normalize
     from modcast.subrules import rules_digest
 
@@ -233,15 +236,17 @@ def predict(
     rb_path = config.RULEBOOK_DIR / f"{sub}.md"
     ctx = A.AgentContext(
         con=store.con,
-        retriever=TfidfRetriever.load(index_path),
+        retriever=load_retriever(sub),
         subreddit=sub,
         # curated subs use their regime-aware window; onboarded subs use all their data
         window=config.index_window(sub) if sub in config.SUBREDDITS else None,
     )
     run_id = new_run_id("predict")
+    # final config: the induced rulebook is NOT fed to the forecaster (measured
+    # to anchor forecasts toward the base rate and hurt accuracy — see changelog);
+    # it remains a standalone artifact for humans and rule_ref citations.
     fc = A.forecast(
-        ctx, record, run_id=run_id,
-        rulebook=rb_path.read_text() if rb_path.exists() else "",
+        ctx, record, run_id=run_id, rulebook="",
         published_rules=rules_digest(sub), model=model, effort=effort,
     )
     base = S.removal_rate(store.con, sub, window=ctx.window)["rate"]

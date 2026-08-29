@@ -76,7 +76,7 @@ METHOD_V2 = """Method — investigation is mandatory, the dossier is only the ba
 # Prompt variant is an ablation axis (see changelog): v1 = anchor-first,
 # v2 = investigation-first. Select via MODCAST_PROMPT; cache keys hash SYSTEM,
 # so variants never mix cached forecasts.
-PROMPT_VARIANT = os.environ.get("MODCAST_PROMPT", "v2")
+PROMPT_VARIANT = os.environ.get("MODCAST_PROMPT", "v1")  # v1 measured best (see changelog)
 SYSTEM = SYSTEM_TEMPLATE.format(method=METHOD_V1 if PROMPT_VARIANT == "v1" else METHOD_V2)
 
 TOOLS: list[dict] = [

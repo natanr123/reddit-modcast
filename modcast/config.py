@@ -79,6 +79,11 @@ LLM_MODEL_NAME = (
 )
 LLM_EFFORT = _llm_parts[2] if len(_llm_parts) > 2 else "high"
 
+# Retrieval backend: "tfidf" (default; zero heavy deps) or "dense"
+# (sentence-transformers embeddings; needs the [embed] extra). Ablation axis.
+RETRIEVER_KIND = os.environ.get("MODCAST_RETRIEVER", "tfidf")
+DENSE_MODEL = os.environ.get("MODCAST_DENSE_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+
 # Evaluation
 EVAL_POSTS_PER_SUB = 250          # sampled from the test window per subreddit
 LLM_EVAL_POSTS_PER_SUB = 60       # seeded subsample of the above for LLM predictors

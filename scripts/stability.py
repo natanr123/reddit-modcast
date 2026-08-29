@@ -14,7 +14,7 @@ import numpy as np
 from modcast import agent as A
 from modcast import config
 from modcast import evaluate as E
-from modcast.retrieval import TfidfRetriever
+from modcast.retrieval import load_retriever
 from modcast.store import Store
 from modcast.subrules import rules_digest
 
@@ -31,8 +31,7 @@ for s in sorted({r.subreddit for r in test}):
     posts.extend(pool[i] for i in sorted(idx))
 print(f"stability: {len(posts)} posts x {K} reps")
 
-retrievers = {s: TfidfRetriever.load(config.DATA_DIR / "index" / f"{s}.joblib")
-              for s in config.SUBREDDITS}
+retrievers = {s: load_retriever(s) for s in config.SUBREDDITS}
 rules = {s: rules_digest(s) for s in config.SUBREDDITS}
 
 
