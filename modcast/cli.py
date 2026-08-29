@@ -87,12 +87,13 @@ def eval(
     (and the cheap ones again, for same-case comparison) on the subsample."""
     from modcast import evaluate as E
     from modcast.baselines import BaseRatePredictor, LogisticPredictor
+    from modcast.calibrate import CalibratedPredictor
 
     store = Store()
     train, test = E.build_split(store.con)
     typer.echo(f"train={len(train)} test={len(test)}")
 
-    cheap = [BaseRatePredictor(), LogisticPredictor()]
+    cheap = [BaseRatePredictor(), LogisticPredictor(), CalibratedPredictor(LogisticPredictor())]
     report = E.run_eval(cheap, train, test)
     typer.echo(json.dumps({k: v["overall"] for k, v in report["predictors"].items()}, indent=1))
 

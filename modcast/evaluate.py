@@ -139,11 +139,14 @@ def run_eval(
         "test": {"n": int(len(y_test)), "base_rate": float(y_test.mean())},
         "predictors": {},
     }
+    report["test"]["post_ids"] = [r.id for r in test_records]
     subs = sorted({r.subreddit for r in test_records})
+    all_p: dict[str, np.ndarray] = {}
     for pred in predictors:
         if hasattr(pred, "fit"):
             pred.fit(train_records, y_train)
         p = np.asarray(pred.predict_proba(test_records), dtype=float)
+        all_p[pred.name] = p
         fig_path = out_dir / "figures" / f"reliability_{_safe(pred.name)}.png"
         reliability_plot(pred.name, y_test, p, fig_path)
         per_sub = {}
@@ -154,11 +157,43 @@ def run_eval(
             "overall": metrics(y_test, p),
             "per_subreddit": per_sub,
             "figure": str(fig_path.relative_to(out_dir)),
+            "predictions": [round(float(x), 4) for x in p],
         }
+    report["paired_bootstrap"] = paired_bootstrap(y_test, all_p)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "eval_latest.json").write_text(json.dumps(report, indent=2) + "\n")
     (out_dir / "eval_latest.md").write_text(_markdown(report))
     return report
+
+
+def paired_bootstrap(
+    y: np.ndarray, preds: dict[str, np.ndarray], resamples: int = 10_000, seed: int = 7
+) -> list[dict]:
+    """Per-pair paired bootstrap on Brier differences over the SAME posts.
+
+    For each ordered pair (a, b): advantage_a = brier(b) - brier(a) per post,
+    resampled with replacement; positive means a is better. `p_a_not_better`
+    is the fraction of resamples where a's advantage vanishes.
+    """
+    rng = np.random.default_rng(seed)
+    n = len(y)
+    idx = rng.integers(0, n, size=(resamples, n))
+    out = []
+    names = list(preds)
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            per_post = (preds[b] - y) ** 2 - (preds[a] - y) ** 2
+            samples = per_post[idx].mean(axis=1)
+            lo, hi = np.percentile(samples, [2.5, 97.5])
+            out.append({
+                "a": a, "b": b,
+                "brier_a": round(float(((preds[a] - y) ** 2).mean()), 4),
+                "brier_b": round(float(((preds[b] - y) ** 2).mean()), 4),
+                "advantage_a": round(float(per_post.mean()), 4),
+                "ci95": [round(float(lo), 4), round(float(hi), 4)],
+                "p_a_not_better": round(float((samples <= 0).mean()), 4),
+            })
+    return out
 
 
 def _markdown(report: dict) -> str:
@@ -182,6 +217,16 @@ def _markdown(report: dict) -> str:
         lines.append(row(f"**{name}**", res["overall"]))
         for sub, m in res["per_subreddit"].items():
             lines.append(row(f"{name} / r/{sub}", m))
+    if report.get("paired_bootstrap"):
+        lines += ["", "## Paired bootstrap (Brier, same posts; positive = A better)", "",
+                  "| A | B | brier A | brier B | advantage A | 95% CI | P(A not better) |",
+                  "|---|---|---|---|---|---|---|"]
+        for c in report["paired_bootstrap"]:
+            lines.append(
+                f"| {c['a']} | {c['b']} | {c['brier_a']} | {c['brier_b']} | "
+                f"{c['advantage_a']:+.4f} | [{c['ci95'][0]:+.4f}, {c['ci95'][1]:+.4f}] | "
+                f"{c['p_a_not_better']:.4f} |"
+            )
     return "\n".join(lines) + "\n"
 
 

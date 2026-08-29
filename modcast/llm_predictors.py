@@ -14,13 +14,40 @@ import duckdb
 import numpy as np
 
 from modcast import agent as A
-from modcast.config import RULEBOOK_DIR, DATA_DIR, index_window
+from modcast import config
+from modcast.config import RULEBOOK_DIR, DATA_DIR, RESULTS_DIR, index_window
 from modcast.llm import LLMSession, text_of
 from modcast.retrieval import TfidfRetriever
 from modcast.schema import PostRecord
 from modcast.subrules import rules_digest
 
 CONCURRENCY = int(os.environ.get("MODCAST_CONCURRENCY", "4"))
+
+
+class PredictionCache:
+    """Per-post prediction cache so long LLM runs are resumable.
+
+    Keyed by predictor name + backend/model/effort; failures are never
+    cached, so a rerun retries only what's missing or failed.
+    """
+
+    def __init__(self, predictor_name: str, model: str | None, effort: str | None):
+        tag = f"{config.LLM_BACKEND}_{model or config.LLM_MODEL_NAME}_{effort or config.LLM_EFFORT}"
+        tag = "".join(c if c.isalnum() or c in "._-" else "_" for c in tag)
+        self.dir = RESULTS_DIR / "pred_cache" / f"{predictor_name}-{tag}"
+        self.dir.mkdir(parents=True, exist_ok=True)
+
+    def get(self, post_id: str) -> dict | None:
+        path = self.dir / f"{post_id}.json"
+        if path.exists():
+            try:
+                return json.loads(path.read_text())
+            except json.JSONDecodeError:
+                return None
+        return None
+
+    def put(self, post_id: str, payload: dict) -> None:
+        (self.dir / f"{post_id}.json").write_text(json.dumps(payload))
 
 ONESHOT_SCHEMA = {
     "type": "json_schema",
@@ -44,8 +71,12 @@ class OneShotPredictor:
     def __init__(self, run_id: str, model: str | None = None):
         self.run_id = run_id
         self.model = model
+        self.cache = PredictionCache(self.name, model, None)
 
     def _one(self, r: PostRecord) -> float:
+        hit = self.cache.get(r.id)
+        if hit is not None:
+            return float(hit["p"])
         session = LLMSession(
             run_id=self.run_id, name=f"oneshot-{r.id}",
             **({"model": self.model} if self.model else {}),
@@ -60,7 +91,9 @@ class OneShotPredictor:
         try:
             resp = session.step(prompt, max_tokens=2000, output_format=ONESHOT_SCHEMA)
             data = json.loads(text_of(resp))
-            return float(min(1.0, max(0.0, data["p_removed"])))
+            p = float(min(1.0, max(0.0, data["p_removed"])))
+            self.cache.put(r.id, {"p": p})
+            return p
         except Exception:
             return 0.5  # a baseline that errors answers with maximum uncertainty
 
@@ -87,6 +120,9 @@ class AgentPredictor:
         self.model = model
         self.effort = effort
         self.use_rulebook = use_rulebook
+        if not use_rulebook:
+            self.name = "modcast_agent_norulebook"  # distinct report/cache key
+        self.cache = PredictionCache(self.name, model, effort)
         self._sub_cache: dict[str, tuple[TfidfRetriever, str, str]] = {}
         self.forecasts: dict[str, A.Forecast] = {}
 
@@ -99,6 +135,9 @@ class AgentPredictor:
         return self._sub_cache[subreddit]
 
     def _one(self, r: PostRecord) -> float:
+        hit = self.cache.get(r.id)
+        if hit is not None:
+            return float(hit["p"])
         retriever, rulebook, rules = self._sub_assets(r.subreddit)
         ctx = A.AgentContext(
             con=self.con.cursor(),  # duckdb: one cursor per thread
@@ -112,6 +151,11 @@ class AgentPredictor:
                 published_rules=rules, model=self.model, effort=self.effort,
             )
             self.forecasts[r.id] = fc
+            self.cache.put(r.id, {
+                "p": fc.p_removed, "turns": fc.turns,
+                "n_factors": len(fc.risk_factors), "n_rejected": len(fc.rejected_factors),
+                "run_id": self.run_id,
+            })
             return fc.p_removed
         except Exception as e:
             print(f"[agent] {r.id} failed: {type(e).__name__}: {e}")

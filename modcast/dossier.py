@@ -30,6 +30,10 @@ class Dossier:
 
     def to_prompt(self) -> str:
         n = self.neighbor_summary
+        neighbor_line = (
+            f"- Among the {n['k']} most similar past posts: {n['removed']} removed ({n['rate']:.1%})"
+            if n["k"] else "- No sufficiently similar past posts found (unusual post for this subreddit)"
+        )
         lines = [
             f"## Candidate post (r/{self.record.subreddit})",
             f"TITLE: {self.record.title}",
@@ -38,8 +42,7 @@ class Dossier:
             "## Computed evidence (code-derived, trustworthy)",
             f"- Subreddit base removal rate ({self.base_rate['n']} posts): "
             f"{self.base_rate['rate']:.1%} [{self.base_rate['ci_low']:.1%}, {self.base_rate['ci_high']:.1%}]",
-            f"- Among the {n['k']} most similar past posts: {n['removed']} removed "
-            f"({n['rate']:.1%})",
+            neighbor_line,
             "- Deterministic features: "
             + ", ".join(f"{k}={v}" for k, v in sorted(self.feature_values.items())),
             "",
