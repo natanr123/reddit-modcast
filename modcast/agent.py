@@ -10,6 +10,7 @@ repair round before unverified factors are dropped.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -24,7 +25,7 @@ from modcast.schema import PostRecord
 
 MAX_TURNS = 12
 
-SYSTEM = """You are ModCast, a moderation-risk forecaster for Reddit posts.
+SYSTEM_TEMPLATE = """You are ModCast, a moderation-risk forecaster for Reddit posts.
 Your job: estimate the probability that the candidate post will be REMOVED BY
 MODERATION (human mods, automod, or admins — author self-deletes don't count)
 within 36 hours of posting, in the given subreddit.
@@ -40,7 +41,25 @@ Trust hierarchy:
 3. Published subreddit rules describe intent; automod behavior may differ.
 4. Your own priors about Reddit are the weakest signal.
 
-Method — investigation is mandatory, the dossier is only the backdrop:
+{method}
+
+where_sql mini-language (validated; errors explain themselves — fix and retry):
+columns: title, selftext, is_self, over_18, link_flair_text, author_flair_text,
+created_utc, text_available. functions: length, lower, upper, regexp_matches,
+strftime, epoch. operators: AND OR NOT LIKE ILIKE = != < > <= >= IS NULL.
+Example: NOT regexp_matches(lower(title), 'aita|wibta')"""
+
+METHOD_V1 = """Method:
+- Read the dossier. Identify which rulebook entries and published rules the
+  post might trip.
+- Test hypotheses about THIS post's traits with compare_removal_rate (e.g. if
+  the post has no flair, compare removal for flaired vs unflaired posts).
+- Read 2-4 nearest precedents (read_post) and note their fates.
+- Then call submit_forecast. Every risk factor must cite precedent post ids
+  that actually support it — citations are machine-verified and unverifiable
+  factors are discarded, so cite only what you have seen in tool results."""
+
+METHOD_V2 = """Method — investigation is mandatory, the dossier is only the backdrop:
 - The base rate, rulebook and neighbor stats describe the AVERAGE post here.
   Your job is to find what distinguishes THIS post from that average. A
   forecast justified only by subreddit-level facts (rules that apply to most
@@ -52,13 +71,13 @@ Method — investigation is mandatory, the dossier is only the backdrop:
   evidence (precedent fates, targeted comparisons) above them.
 - Then call submit_forecast. Every risk factor must cite precedent post ids
   that actually support it — citations are machine-verified and unverifiable
-  factors are discarded, so cite only what you have seen in tool results.
+  factors are discarded, so cite only what you have seen in tool results."""
 
-where_sql mini-language (validated; errors explain themselves — fix and retry):
-columns: title, selftext, is_self, over_18, link_flair_text, author_flair_text,
-created_utc, text_available. functions: length, lower, upper, regexp_matches,
-strftime, epoch. operators: AND OR NOT LIKE ILIKE = != < > <= >= IS NULL.
-Example: NOT regexp_matches(lower(title), 'aita|wibta')"""
+# Prompt variant is an ablation axis (see changelog): v1 = anchor-first,
+# v2 = investigation-first. Select via MODCAST_PROMPT; cache keys hash SYSTEM,
+# so variants never mix cached forecasts.
+PROMPT_VARIANT = os.environ.get("MODCAST_PROMPT", "v2")
+SYSTEM = SYSTEM_TEMPLATE.format(method=METHOD_V1 if PROMPT_VARIANT == "v1" else METHOD_V2)
 
 TOOLS: list[dict] = [
     {
@@ -169,6 +188,8 @@ class Forecast:
     input_tokens: int
     output_tokens: int
     raw_submission: dict = field(default_factory=dict)
+    neighbors: list[dict] = field(default_factory=list)  # dossier's hydrated similar posts
+    neighbor_summary: dict = field(default_factory=dict)     # {k, removed, rate} over all retrieved
 
 
 def _execute_tool(ctx: AgentContext, name: str, args: dict) -> tuple[str, bool]:
@@ -289,4 +310,6 @@ def forecast(
         input_tokens=session.total_input_tokens,
         output_tokens=session.total_output_tokens,
         raw_submission={k: v for k, v in submission.items() if not k.startswith("_")},
+        neighbors=dossier.neighbors,
+        neighbor_summary=dossier.neighbor_summary,
     )

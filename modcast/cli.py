@@ -124,11 +124,12 @@ def eval(
 
 @app.command()
 def predict(
-    sub: str = typer.Option(...),
+    sub: str = typer.Option(None, help="Subreddit (derived automatically with --url/--post-id)"),
     title: str = typer.Option(None),
     body: str = typer.Option("", help="Post body (or use --body-file)"),
     body_file: Path = typer.Option(None),
     post_id: str = typer.Option(None, help="Forecast a real archived post instead"),
+    url: str = typer.Option(None, help="Reddit post URL — fetches title/body/subreddit automatically"),
     model: str = typer.Option(None),
     effort: str = typer.Option(None, help="Reasoning effort; default from .env LLM_MODEL"),
 ) -> None:
@@ -142,15 +143,22 @@ def predict(
     from modcast.subrules import rules_digest
 
     store = Store(read_only=True)
-    if post_id:
+    if url:
+        from modcast.fetch import post_from_url
+
+        record = normalize(post_from_url(url))
+        sub = record.subreddit
+        typer.echo(f"[fetched r/{sub} post {record.id}: {record.title!r}]")
+    elif post_id:
         raw_row = store.query("SELECT * FROM posts WHERE id = ?", [post_id]).df()
         if raw_row.empty:
             raise typer.BadParameter(f"post {post_id} not in db")
         d = raw_row.iloc[0].to_dict()
         record = PostRecord(**{k: d[k] for k in PostRecord.__dataclass_fields__})
+        sub = record.subreddit
     else:
-        if title is None:
-            raise typer.BadParameter("--title required (or --post-id)")
+        if title is None or sub is None:
+            raise typer.BadParameter("--sub and --title required (or use --url / --post-id)")
         if body_file:
             body = body_file.read_text()
         record = normalize({
@@ -158,12 +166,20 @@ def predict(
             "created_utc": int(time.time()), "title": title, "selftext": body,
             "is_self": True,
         })
+    index_path = config.DATA_DIR / "index" / f"{sub}.joblib"
+    if not index_path.exists():
+        known = ", ".join(config.SUBREDDITS)
+        raise typer.BadParameter(
+            f"r/{sub} is not in ModCast's corpus yet (available: {known}). "
+            f"Onboard it first: modcast onboard {sub}"
+        )
     rb_path = config.RULEBOOK_DIR / f"{sub}.md"
     ctx = A.AgentContext(
         con=store.con,
-        retriever=TfidfRetriever.load(config.DATA_DIR / "index" / f"{sub}.joblib"),
+        retriever=TfidfRetriever.load(index_path),
         subreddit=sub,
-        window=config.index_window(sub),
+        # curated subs use their regime-aware window; onboarded subs use all their data
+        window=config.index_window(sub) if sub in config.SUBREDDITS else None,
     )
     run_id = new_run_id("predict")
     fc = A.forecast(
@@ -176,7 +192,9 @@ def predict(
     out = config.RESULTS_DIR / "reports" / f"{record.id}.md"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text)
-    typer.echo(text)
+    from modcast.report import colorize
+
+    typer.echo(colorize(text))
     typer.echo(f"[saved {out} | trajectory {config.RESULTS_DIR / 'trajectories' / run_id}/]")
 
 

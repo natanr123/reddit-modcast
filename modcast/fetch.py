@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import re
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -158,3 +159,47 @@ def iter_cached(subreddit: str, raw_dir: Path = RAW_DIR) -> Iterator[dict[str, A
             if post["id"] not in seen:
                 seen.add(post["id"])
                 yield post
+
+
+# -- URL mode ----------------------------------------------------------------
+
+_POST_ID_RE = re.compile(r"(?:comments|redd\.it)/([a-z0-9]{4,10})", re.I)
+
+
+def post_id_from_url(url: str) -> str:
+    m = _POST_ID_RE.search(url)
+    if not m:
+        raise ValueError(f"cannot find a post id in {url!r}")
+    return m.group(1).lower()
+
+
+def post_from_url(url: str) -> dict[str, Any]:
+    """Fetch one post's raw JSON given any reddit post URL.
+
+    reddit's public .json endpoint first (freshest); when the post is already
+    removed/deleted there (or the request fails), fall back to the Arctic
+    Shift archive, which preserves the pre-removal text.
+    """
+    pid = post_id_from_url(url)
+    raw: dict[str, Any] | None = None
+    try:
+        r = httpx.get(
+            f"https://www.reddit.com/comments/{pid}.json",
+            headers={"User-Agent": USER_AGENT},
+            timeout=30, follow_redirects=True,
+        )
+        r.raise_for_status()
+        raw = r.json()[0]["data"]["children"][0]["data"]
+    except Exception:
+        raw = None
+    if raw is None or (raw.get("selftext") or "") in ("[removed]", "[deleted]"):
+        client = ArcticShiftClient()
+        try:
+            archived = client.fetch_by_ids([pid])
+        finally:
+            client.close()
+        if archived:
+            raw = archived[0]
+    if raw is None:
+        raise ValueError(f"post {pid} not found on reddit or in the archive")
+    return raw

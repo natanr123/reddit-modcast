@@ -74,9 +74,9 @@ def build(
     hydrated = []
     for h in hits[:10]:
         row = con.execute(
-            "SELECT title FROM posts WHERE id = ?", [h["id"]]
+            "SELECT title, substr(selftext, 1, 200) FROM posts WHERE id = ?", [h["id"]]
         ).fetchone()
-        hydrated.append({**h, "title": row[0] if row else ""})
+        hydrated.append({**h, "title": row[0] if row else "", "body": row[1] if row else ""})
     return Dossier(
         record=record,
         base_rate=base,
