@@ -177,7 +177,7 @@ def predict(
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text)
     typer.echo(text)
-    typer.echo(f"[saved {out} | trajectory results/trajectories/{run_id}/]")
+    typer.echo(f"[saved {out} | trajectory {config.RESULTS_DIR / 'trajectories' / run_id}/]")
 
 
 if __name__ == "__main__":
