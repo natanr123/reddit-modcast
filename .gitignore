@@ -1,0 +1,45 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+.eggs/
+.venv/
+venv/
+.python-version
+
+# --- Test / tooling caches ---
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# --- PyCharm / JetBrains ---
+.idea/
+.junie/
+
+# --- Secrets / local config ---
+.env
+.env.*
+*.local
+
+# --- Project: raw data stays out of the repo (Reddit data is fetched, not redistributed) ---
+data/
+*.zst
+*.zst_blocks
+*.ndjson
+*.jsonl.gz
+*.duckdb
+*.duckdb.wal
+
+# --- Scratch / local-only files ---
+tmp/
+scratch/
+
+# --- OS junk ---
+.DS_Store
+Thumbs.db
