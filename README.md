@@ -82,11 +82,12 @@ committed results files.
 | Stage | What we tried and why | Evidence | Decision / learning |
 |---|---|---|---|
 | 0 | Go/no-go: verify Arctic Shift labels, text capture, retrieval delay; pick subreddits | `results/go_no_go.md` | GO. Fast-removal subs lose text before first snapshot → label must union `removed_by_category` + `_meta.removal_type`; chose 4 strict-but-not-instant subs |
-| 1 | Baselines (base-rate, logistic) on full test set | _pending_ | _pending_ |
-| 2 | One-shot LLM baseline vs agent v1 (dossier + tools) | _pending_ | _pending_ |
-| 3 | + induced rulebooks (ablation: `--no-rulebook`) | _pending_ | _pending_ |
-| 4 | + citation verifier repair round | _pending_ | _pending_ |
-| 5 | + calibration | _pending_ | _pending_ |
+| 0b | Full-corpus ingest exposed two label traps | `results/go_no_go.md` (addendum) | Restored posts (`was_initially_deleted`) are survivors, not removals; r/AITA switched moderation regimes in July 2026 → per-sub index windows (`SUB_INDEX_START`). A random split would have hidden both |
+| 1 | Cheap baselines on 1,000 test posts (250/sub) | `results/eval_latest.md` | base-rate Brier 0.208 / AUC 0.729; logistic Brier 0.194 / AUC 0.818 but ECE 0.166 — discrimination is learnable, calibration is the gap |
+| 2 | Rulebook induction (verified memory): model proposes drivers, code re-verifies, only confirmed rules kept | `rulebooks/*.md` | 23 rules kept, e.g. unflaired r/personalfinance posts 98.2% removed (n=10,553); one counterintuitive keep (tuition posts removed *less*); cost $0.39 |
+| 3 | Head-to-head on 100 identical held-out posts: one-shot LLM vs fair baselines vs agent | `results/llm/eval_latest.md` | **One-shot LLM (Brier 0.249) is worse than a constant base-rate guess (0.192).** Agent: **Brier 0.155, AUC 0.846, best ECE 0.091** — 38% Brier improvement over today's practice; mean 4.4 tool turns/forecast; $0.077/post |
+| 4 | + rulebook ablation (`--no-rulebook`) | _pending_ | _pending_ |
+| 5 | + calibration of the logistic baseline (fairness: strengthen the baseline, not just the agent) | _pending_ | _pending_ |
 
 ## Ethics
 

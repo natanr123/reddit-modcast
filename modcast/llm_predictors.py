@@ -27,7 +27,7 @@ ONESHOT_SCHEMA = {
     "schema": {
         "type": "object",
         "properties": {
-            "p_removed": {"type": "number", "minimum": 0, "maximum": 1},
+            "p_removed": {"type": "number", "description": "Probability in [0, 1]."},
             "reasoning": {"type": "string"},
         },
         "required": ["p_removed", "reasoning"],

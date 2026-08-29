@@ -93,7 +93,7 @@ TOOLS: list[dict] = [
             "type": "object",
             "properties": {
                 "text": {"type": "string"},
-                "k": {"type": "integer", "minimum": 1, "maximum": 50},
+                "k": {"type": "integer", "description": "How many neighbors, 1-50."},
             },
             "required": ["text", "k"],
             "additionalProperties": False,
@@ -117,7 +117,7 @@ TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "p_removed": {"type": "number", "minimum": 0, "maximum": 1},
+                "p_removed": {"type": "number", "description": "Probability in [0, 1]."},
                 "risk_factors": {
                     "type": "array",
                     "items": {
@@ -177,7 +177,7 @@ def _execute_tool(ctx: AgentContext, name: str, args: dict) -> tuple[str, bool]:
             out = S.compare(ctx.con, ctx.subreddit, where_sql=args["where_sql"], window=ctx.window)
             return json.dumps(out), False
         if name == "find_similar_posts":
-            hits = ctx.retriever.query(args["text"], k=args["k"])
+            hits = ctx.retriever.query(args["text"], k=max(1, min(50, int(args["k"]))))
             for h in hits:
                 row = ctx.con.execute("SELECT title FROM posts WHERE id = ?", [h["id"]]).fetchone()
                 h["title"] = (row[0] if row else "")[:140]
