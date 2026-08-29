@@ -66,8 +66,11 @@ def build(
     rulebook: str = "",
     published_rules: str = "",
     k: int = RETRIEVAL_TOP_K,
+    window: tuple[str, str] | None = None,
 ) -> Dossier:
-    base = S.removal_rate(con, record.subreddit)
+    # window matters: regime-shifted subs (config.SUB_INDEX_START) must not
+    # quote a base rate contaminated by a dead moderation regime
+    base = S.removal_rate(con, record.subreddit, window=window)
     hits = retriever.query(
         f"{record.title}\n\n{record.selftext}", k=k, before_utc=record.created_utc
     )

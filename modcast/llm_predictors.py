@@ -23,6 +23,7 @@ from modcast.schema import PostRecord
 from modcast.subrules import rules_digest
 
 CONCURRENCY = int(os.environ.get("MODCAST_CONCURRENCY", "4"))
+CACHE_VERSION = "d2"  # bump when forecast-affecting code outside SYSTEM/TOOLS changes (e.g. dossier)
 
 
 class PredictionCache:
@@ -128,7 +129,7 @@ class AgentPredictor:
             self.name = "modcast_agent_norulebook"  # distinct report/cache key
         # hash the agent's system prompt into the cache key: editing the prompt
         # automatically invalidates stale forecasts instead of silently mixing versions
-        prompt_hash = hashlib.sha1(A.SYSTEM.encode()).hexdigest()[:8]
+        prompt_hash = CACHE_VERSION + hashlib.sha1((A.SYSTEM + json.dumps(A.TOOLS, sort_keys=True)).encode()).hexdigest()[:8]
         self.cache = PredictionCache(self.name, model, effort, variant=prompt_hash)
         self._sub_cache: dict[str, tuple[TfidfRetriever, str, str]] = {}
         self.forecasts: dict[str, A.Forecast] = {}

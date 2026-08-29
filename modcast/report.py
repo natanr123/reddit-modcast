@@ -60,9 +60,9 @@ def colorize(text: str) -> str:
 def _band(p: float) -> str:
     if p < 0.15:
         return "CLEAR SKIES"
-    if p < 0.35:
+    if p < 0.40:
         return "LIGHT CLOUDS"
-    if p < 0.60:
+    if p < 0.75:
         return "STORM WATCH"
     return "SEVERE WEATHER"
 
@@ -83,7 +83,12 @@ def render(record: PostRecord, fc: Forecast, base_rate: float | None = None) -> 
             out.append(f"- {arrow} {f['factor']}")
             if f.get("rule_ref"):
                 out.append(f"  - rule: {f['rule_ref']}")
-            out.append(f"  - precedent: {', '.join(f.get('evidence_post_ids', []))}")
+            if f.get("evidence_post_ids"):
+                out.append(f"  - precedent: {', '.join(f['evidence_post_ids'])}")
+            if f.get("stat"):
+                st = f["stat"]
+                out.append(f"  - corpus stat (re-verified): {st['rate_true']:.1%} removal when true "
+                           f"(n={st['n_true']}) vs {st['rate_false']:.1%} when false (n={st['n_false']})")
         return out
 
     risks = [f for f in fc.risk_factors if f.get("direction") == "increases"]

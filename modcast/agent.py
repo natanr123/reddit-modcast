@@ -148,10 +148,11 @@ TOOLS: list[dict] = [
                         "properties": {
                             "factor": {"type": "string", "description": "The trait of THIS post and why it matters here."},
                             "direction": {"type": "string", "enum": ["increases", "decreases"]},
-                            "evidence_post_ids": {"type": "array", "items": {"type": "string"}},
+                            "evidence_post_ids": {"type": "array", "items": {"type": "string"}, "description": "Precedent post ids you have seen in tool results. May be empty ONLY when stat_where_sql is given."},
                             "rule_ref": {"type": ["string", "null"], "description": "Rulebook entry or published rule this maps to, if any."},
+                            "stat_where_sql": {"type": ["string", "null"], "description": "Alternative evidence: a where_sql predicate capturing this post's trait. The verifier RE-RUNS it on the corpus and keeps the factor only if the measured rates support the direction. Use for statistically-backed factors no read precedent demonstrates (e.g. the aggregate short-body effect when every inspected precedent survived)."},
                         },
-                        "required": ["factor", "direction", "evidence_post_ids", "rule_ref"],
+                        "required": ["factor", "direction", "evidence_post_ids", "rule_ref", "stat_where_sql"],
                         "additionalProperties": False,
                     },
                 },
@@ -235,7 +236,8 @@ def forecast(
     effort: str | None = None,
 ) -> Forecast:
     dossier: Dossier = build_dossier(
-        ctx.con, ctx.retriever, record, rulebook=rulebook, published_rules=published_rules
+        ctx.con, ctx.retriever, record, rulebook=rulebook,
+        published_rules=published_rules, window=ctx.window,
     )
     session = LLMSession(
         run_id=run_id,
@@ -261,7 +263,7 @@ def forecast(
         for call in calls:
             if call.name == "submit_forecast":
                 submission = call.input
-                verified, rejected = verifier.verify_factors(ctx.con, submission.get("risk_factors", []))
+                verified, rejected = verifier.verify_factors(ctx.con, submission.get("risk_factors", []), subreddit=ctx.subreddit, window=ctx.window)
                 if rejected and repair_rounds == 0:
                     repair_rounds += 1
                     submission = None
