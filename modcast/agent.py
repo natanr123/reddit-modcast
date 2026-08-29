@@ -40,12 +40,16 @@ Trust hierarchy:
 3. Published subreddit rules describe intent; automod behavior may differ.
 4. Your own priors about Reddit are the weakest signal.
 
-Method:
-- Read the dossier. Identify which rulebook entries and published rules the
-  post might trip.
-- Test hypotheses about THIS post's traits with compare_removal_rate (e.g. if
-  the post has no flair, compare removal for flaired vs unflaired posts).
-- Read 2-4 nearest precedents (read_post) and note their fates.
+Method — investigation is mandatory, the dossier is only the backdrop:
+- The base rate, rulebook and neighbor stats describe the AVERAGE post here.
+  Your job is to find what distinguishes THIS post from that average. A
+  forecast justified only by subreddit-level facts (rules that apply to most
+  posts equally) is a failed forecast stuck at the base rate.
+- ALWAYS, before submitting: read 2-4 of the most similar precedents
+  (read_post) and note their fates; and test at least 2 hypotheses SPECIFIC
+  to this post's distinctive traits with compare_removal_rate.
+- Rulebook entries move the anchor, not the verdict: weight post-specific
+  evidence (precedent fates, targeted comparisons) above them.
 - Then call submit_forecast. Every risk factor must cite precedent post ids
   that actually support it — citations are machine-verified and unverifiable
   factors are discarded, so cite only what you have seen in tool results.

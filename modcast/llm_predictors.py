@@ -6,6 +6,7 @@ Both are evaluated on identical cases by the same harness.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor
@@ -31,8 +32,11 @@ class PredictionCache:
     cached, so a rerun retries only what's missing or failed.
     """
 
-    def __init__(self, predictor_name: str, model: str | None, effort: str | None):
+    def __init__(self, predictor_name: str, model: str | None, effort: str | None,
+                 variant: str = ""):
         tag = f"{config.LLM_BACKEND}_{model or config.LLM_MODEL_NAME}_{effort or config.LLM_EFFORT}"
+        if variant:
+            tag += f"_{variant}"
         tag = "".join(c if c.isalnum() or c in "._-" else "_" for c in tag)
         self.dir = RESULTS_DIR / "pred_cache" / f"{predictor_name}-{tag}"
         self.dir.mkdir(parents=True, exist_ok=True)
@@ -122,7 +126,10 @@ class AgentPredictor:
         self.use_rulebook = use_rulebook
         if not use_rulebook:
             self.name = "modcast_agent_norulebook"  # distinct report/cache key
-        self.cache = PredictionCache(self.name, model, effort)
+        # hash the agent's system prompt into the cache key: editing the prompt
+        # automatically invalidates stale forecasts instead of silently mixing versions
+        prompt_hash = hashlib.sha1(A.SYSTEM.encode()).hexdigest()[:8]
+        self.cache = PredictionCache(self.name, model, effort, variant=prompt_hash)
         self._sub_cache: dict[str, tuple[TfidfRetriever, str, str]] = {}
         self.forecasts: dict[str, A.Forecast] = {}
 
