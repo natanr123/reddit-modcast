@@ -4,15 +4,39 @@ Every module reads from here; nothing hardcodes dates or subreddit names.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _load_dotenv() -> None:
+    """Load PROJECT_ROOT/.env into os.environ (existing env vars win)."""
+    path = PROJECT_ROOT / ".env"
+    if not path.exists():
+        return
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip().strip("'\""))
+
+
+_load_dotenv()
+
 DATA_DIR = PROJECT_ROOT / "data"
 RAW_DIR = DATA_DIR / "raw"
 DB_PATH = DATA_DIR / "modcast.duckdb"
-RESULTS_DIR = PROJECT_ROOT / "results"
-RULEBOOK_DIR = PROJECT_ROOT / "rulebooks"
+
+# Generated artifacts (eval results, figures, trajectories, rulebooks, reports)
+# go under MODCAST_OUT_DIR while experimenting (e.g. tmp/generated, gitignored);
+# unset it — the judge default — and they land in the committed repo folders.
+_out = os.environ.get("MODCAST_OUT_DIR")
+OUT_ROOT = (PROJECT_ROOT / _out).resolve() if _out else PROJECT_ROOT
+RESULTS_DIR = OUT_ROOT / "results"
+RULEBOOK_DIR = OUT_ROOT / "rulebooks"
 
 ARCTIC_SHIFT_BASE = "https://arctic-shift.photon-reddit.com/api"
 USER_AGENT = "reddit-modcast (micro1 hackathon research; contact: repo issues)"
@@ -34,6 +58,16 @@ INDEX_START = "2026-01-01"
 INDEX_END = "2026-07-31"  # inclusive
 TEST_START = "2026-08-01"
 TEST_END = "2026-08-25"  # inclusive
+
+# Regime shifts: r/AmItheAsshole ran filter-first moderation (automod removed
+# ~95% of new posts at creation; mods approved a subset later) until late June
+# 2026. Training on that regime would model a policy that no longer exists at
+# test time, so its index window starts where the current regime does.
+SUB_INDEX_START: dict[str, str] = {"AmItheAsshole": "2026-07-01"}
+
+
+def index_window(subreddit: str) -> tuple[str, str]:
+    return (SUB_INDEX_START.get(subreddit, INDEX_START), INDEX_END)
 
 # Evaluation
 EVAL_POSTS_PER_SUB = 250          # sampled from the test window per subreddit

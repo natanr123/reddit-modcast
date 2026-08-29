@@ -16,7 +16,7 @@ from dataclasses import dataclass
 import duckdb
 
 from modcast import stats as S
-from modcast.config import RULEBOOK_DIR, INDEX_START, INDEX_END, RANDOM_SEED
+from modcast.config import RULEBOOK_DIR, RANDOM_SEED, index_window
 from modcast.llm import LLMSession, tool_uses
 from modcast.subrules import rules_digest
 
@@ -96,15 +96,18 @@ class InductionResult:
     output_tokens: int
 
 
-def _examples(con: duckdb.DuckDBPyConnection, subreddit: str, label: str, n: int = 8) -> str:
+def _examples(con: duckdb.DuckDBPyConnection, subreddit: str, label: str, window: tuple[str, str], n: int = 8) -> str:
+    from modcast.stats import _iso_to_epoch
+
     rows = con.execute(
         """
         SELECT title, substr(selftext, 1, 300) FROM posts
         WHERE subreddit = ? AND label = ? AND text_available
-          AND created_utc >= epoch(TIMESTAMP ?) AND created_utc < epoch(TIMESTAMP ?) + 86400
+          AND created_utc >= ? AND created_utc < ?
         ORDER BY hash(id || ?) LIMIT ?
         """,
-        [subreddit, label, INDEX_START, INDEX_END, str(RANDOM_SEED), n],
+        [subreddit, label, _iso_to_epoch(window[0]),
+         _iso_to_epoch(window[1], exclusive_end=True), str(RANDOM_SEED), n],
     ).fetchall()
     return "\n".join(f"- {r[0]!r}: {r[1]!r}" for r in rows)
 
@@ -117,13 +120,13 @@ def induce(
     effort: str = "high",
     max_turns: int = 20,
 ) -> InductionResult:
-    window = (INDEX_START, INDEX_END)
+    window = index_window(subreddit)
     base = S.removal_rate(con, subreddit, window=window)
     prompt = "\n\n".join([
         f"Subreddit: r/{subreddit}. Base removal rate: {base['rate']:.1%} over {base['n']} decided posts.",
         "## Published rules\n" + rules_digest(subreddit),
-        "## Sample REMOVED posts\n" + _examples(con, subreddit, "removed_mod"),
-        "## Sample SURVIVED posts\n" + _examples(con, subreddit, "survived"),
+        "## Sample REMOVED posts\n" + _examples(con, subreddit, "removed_mod", window),
+        "## Sample SURVIVED posts\n" + _examples(con, subreddit, "survived", window),
         "Begin testing hypotheses.",
     ])
     session = LLMSession(
@@ -178,7 +181,7 @@ def induce(
     RULEBOOK_DIR.mkdir(parents=True, exist_ok=True)
     path = RULEBOOK_DIR / f"{subreddit}.md"
     lines = [f"# Rulebook: r/{subreddit}",
-             f"Base removal rate {base['rate']:.1%} (n={base['n']}), window {INDEX_START}..{INDEX_END}.",
+             f"Base removal rate {base['rate']:.1%} (n={base['n']}), window {window[0]}..{window[1]}.",
              "Every entry below was verified by code against the labeled corpus.", ""]
     for e in sorted(kept, key=lambda x: -abs(x["effect"])):
         lines.append(

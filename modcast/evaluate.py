@@ -52,7 +52,11 @@ def build_split(
     seed: int = config.RANDOM_SEED,
 ) -> tuple[list[PostRecord], list[PostRecord]]:
     """Train = all eligible index-window posts; test = seeded per-sub sample."""
-    train = _fetch(con, *train_window)
+    # per-sub regime-shift starts (config.SUB_INDEX_START) trim old-regime train data
+    train = [
+        r for r in _fetch(con, *train_window)
+        if r.created_utc >= _epoch(config.index_window(r.subreddit)[0])
+    ]
     pool = _fetch(con, *test_window)
     rng = np.random.default_rng(seed)
     test: list[PostRecord] = []

@@ -32,9 +32,10 @@ def index() -> None:
     from modcast.stats import _iso_to_epoch  # shared epoch conversion
 
     store = Store()
-    start = _iso_to_epoch(config.INDEX_START)
-    end = _iso_to_epoch(config.INDEX_END, exclusive_end=True)
     for sub in config.SUBREDDITS:
+        w = config.index_window(sub)
+        start = _iso_to_epoch(w[0])
+        end = _iso_to_epoch(w[1], exclusive_end=True)
         df = store.query(
             """
             SELECT id, title || chr(10) || chr(10) || selftext AS text, created_utc, label
@@ -161,7 +162,7 @@ def predict(
         con=store.con,
         retriever=TfidfRetriever.load(config.DATA_DIR / "index" / f"{sub}.joblib"),
         subreddit=sub,
-        window=(config.INDEX_START, config.INDEX_END),
+        window=config.index_window(sub),
     )
     run_id = new_run_id("predict")
     fc = A.forecast(

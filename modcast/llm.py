@@ -66,19 +66,24 @@ class LLMSession:
             max_tokens=max_tokens,
             messages=self.messages,
             output_config=output_config,
+            cache_control={"type": "ephemeral"},  # auto-cache: tool loops resend history every turn
         )
         if self.system:
             kwargs["system"] = self.system
         if self.tools:
             kwargs["tools"] = self.tools
         response = self._create_with_retry(**kwargs)
-        self.total_input_tokens += response.usage.input_tokens
-        self.total_output_tokens += response.usage.output_tokens
+        u = response.usage
+        self.total_input_tokens += u.input_tokens
+        self.total_output_tokens += u.output_tokens
         self.messages.append({"role": "assistant", "content": response.content})
         self._log("assistant", [b.to_dict() for b in response.content])
         self._log("usage", {"stop_reason": response.stop_reason,
-                            "input_tokens": response.usage.input_tokens,
-                            "output_tokens": response.usage.output_tokens})
+                            "model": response.model,
+                            "input_tokens": u.input_tokens,
+                            "output_tokens": u.output_tokens,
+                            "cache_creation_input_tokens": getattr(u, "cache_creation_input_tokens", 0) or 0,
+                            "cache_read_input_tokens": getattr(u, "cache_read_input_tokens", 0) or 0})
         return response
 
     def tool_results(self, results: list[dict]) -> None:

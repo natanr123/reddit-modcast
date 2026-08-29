@@ -51,8 +51,23 @@ class PostRecord:
         return asdict(self)
 
 
-def label(removal_type: str | None, removed_by_category: str | None) -> Label:
+def label(
+    removal_type: str | None,
+    removed_by_category: str | None,
+    was_initially_deleted: bool = False,
+) -> Label:
+    """Final observable state at the archive's second pass (~36h) decides.
+
+    `was_initially_deleted=True` means the post was removed at the first
+    snapshot but is AVAILABLE at the second — i.e. a filter-first automod
+    held it and a mod approved it. That is a surviving post; labeling it
+    removed was the bug that made filter-first subreddits look like 90%
+    removal. (For these restored posts `removal_type` describes the initial
+    removal, not the final state.)
+    """
     p = LABEL_POLICY
+    if was_initially_deleted:
+        return Label.SURVIVED
     if removal_type in p.mod_removal_types or removed_by_category in p.mod_removed_by_categories:
         return Label.REMOVED_MOD
     if removal_type in p.author_removal_types or removed_by_category in p.author_removed_by_categories:
@@ -67,7 +82,7 @@ def normalize(raw: dict[str, Any]) -> PostRecord:
     removal_type = meta.get("removal_type")
     removed_by_category = raw.get("removed_by_category")
     selftext = raw.get("selftext") or ""
-    lab = label(removal_type, removed_by_category)
+    lab = label(removal_type, removed_by_category, bool(meta.get("was_initially_deleted")))
     return PostRecord(
         id=raw["id"],
         subreddit=raw["subreddit"],

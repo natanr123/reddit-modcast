@@ -60,18 +60,29 @@ class ArcticShiftClient:
             return resp.json()
 
     def search_page(self, subreddit: str, after: int, before: int) -> list[dict[str, Any]]:
-        """One ascending page of posts; `after` is exclusive, `before` exclusive."""
-        data = self._get(
-            "/posts/search",
-            {
-                "subreddit": subreddit,
-                "after": str(after),
-                "before": str(before),
-                "limit": "auto",
-                "sort": "asc",
-            },
-        )
-        return data["data"]
+        """One ascending page of posts; `after` is exclusive, `before` exclusive.
+
+        limit=auto can 422 on very small residual windows; fall back to a
+        fixed limit, and treat a persistent 422 on a tiny window as empty.
+        """
+        params = {
+            "subreddit": subreddit,
+            "after": str(after),
+            "before": str(before),
+            "limit": "auto",
+            "sort": "asc",
+        }
+        try:
+            return self._get("/posts/search", params)["data"]
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code != 422:
+                raise
+        try:
+            return self._get("/posts/search", {**params, "limit": "100"})["data"]
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 422 and before - after < 600:
+                return []  # sub-10-minute residual window the API refuses; nothing left
+            raise
 
     def iter_window(self, subreddit: str, after: int, before: int) -> Iterator[dict[str, Any]]:
         """Every post in [after, before), paginating until an empty page."""

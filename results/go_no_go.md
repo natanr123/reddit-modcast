@@ -44,3 +44,20 @@ personalfinance (topic + automod), unpopularopinion (heavy-automod stress case).
 ## Decision
 
 **GO.** All three go/no-go checks passed. Fallback (QueryDoctor) retired.
+
+## Addendum (full-corpus ingest, 2026-08-29): two findings the probe missed
+
+1. **Restored posts were mislabeled.** `_meta.was_initially_deleted=true` means
+   a post was removed at the first snapshot but is AVAILABLE at the second —
+   filter-first automod held it and a human mod approved it. The final state is
+   *survived*; the initial label logic counted these as removals. Fixed:
+   `was_initially_deleted` now takes precedence in `schema.label()`.
+2. **r/AmItheAsshole changed moderation regimes in July 2026.** Jan–Jun, ~95%
+   of new AITA posts were removed at creation (`removed_by_category` set within
+   ~20 s of posting, most never restored) — filter-first moderation. From July
+   the pattern collapses to ~35% conventional removals, matching our August
+   probe. Monthly evidence (survived / removed / removed-at-snapshot-1):
+   Jan 506/8484/5791 … Jun 250/9490/7089 → **Jul 2697/5247/2394, Aug 2457/3742/1036**.
+   A forecaster trained on the January regime would be confidently wrong in
+   August; a random train/test split would have hidden this entirely. AITA's
+   index window therefore starts 2026-07-01 (`config.SUB_INDEX_START`).

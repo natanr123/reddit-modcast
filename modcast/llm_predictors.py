@@ -14,7 +14,7 @@ import duckdb
 import numpy as np
 
 from modcast import agent as A
-from modcast.config import RULEBOOK_DIR, INDEX_START, INDEX_END, DATA_DIR
+from modcast.config import RULEBOOK_DIR, DATA_DIR, index_window
 from modcast.llm import LLMSession, text_of
 from modcast.retrieval import TfidfRetriever
 from modcast.schema import PostRecord
@@ -104,7 +104,7 @@ class AgentPredictor:
             con=self.con.cursor(),  # duckdb: one cursor per thread
             retriever=retriever,
             subreddit=r.subreddit,
-            window=(INDEX_START, INDEX_END),
+            window=index_window(r.subreddit),
         )
         try:
             fc = A.forecast(

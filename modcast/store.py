@@ -55,12 +55,16 @@ class Store:
 
     def ingest_raw(self, raws: Iterable[dict[str, Any]]) -> dict[str, int]:
         """Normalize and upsert raw archive dicts; returns per-label counts + total."""
+        import pandas as pd
+
         rows = [tuple(getattr(normalize(raw), c) for c in _COLUMNS) for raw in raws]
         if rows:
-            placeholders = ", ".join("?" for _ in _COLUMNS)
-            self.con.executemany(
-                f"INSERT OR REPLACE INTO posts VALUES ({placeholders})", rows
-            )
+            df = pd.DataFrame(rows, columns=_COLUMNS).drop_duplicates("id", keep="last")
+            self.con.register("_ingest_df", df)
+            # vectorized upsert: duckdb executemany is row-at-a-time and far too slow here
+            self.con.execute("DELETE FROM posts WHERE id IN (SELECT id FROM _ingest_df)")
+            self.con.execute("INSERT INTO posts SELECT * FROM _ingest_df")
+            self.con.unregister("_ingest_df")
         counts = Counter(row[_COLUMNS.index("label")] for row in rows)
         return {"total": len(rows), **counts}
 
