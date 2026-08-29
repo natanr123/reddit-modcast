@@ -12,7 +12,59 @@ import typer
 from modcast import config
 from modcast.store import Store
 
-app = typer.Typer(no_args_is_help=True, add_completion=False)
+app = typer.Typer(add_completion=False)
+
+
+@app.callback(invoke_without_command=True)
+def _main(ctx: typer.Context) -> None:
+    """ModCast — a weather forecast for your Reddit post."""
+    if ctx.invoked_subcommand is None:
+        interactive()
+
+
+def _available_subs() -> list[str]:
+    return sorted(p.stem for p in (config.DATA_DIR / "index").glob("*.joblib"))
+
+
+def interactive() -> None:
+    """No-command mode: ask what to do, collect inputs, run, repeat."""
+    typer.secho("\n⛅ ModCast — a weather forecast for your Reddit post", bold=True)
+    while True:
+        typer.echo(
+            "\nWhat do you want to do?\n"
+            "  1. Forecast a draft post (before you post it)\n"
+            "  2. Forecast a Reddit post by URL\n"
+            "  3. Forecast an archived post by id\n"
+            "  4. Quit"
+        )
+        choice = typer.prompt("Choice", default="1").strip()
+        try:
+            if choice == "1":
+                subs = _available_subs()
+                typer.echo(f"Available subreddits: {', '.join(subs)}")
+                sub = typer.prompt("Subreddit").strip().removeprefix("r/")
+                title = typer.prompt("Title")
+                typer.echo("Body (finish with an empty line):")
+                body_lines: list[str] = []
+                while (line := input()) != "":
+                    body_lines.append(line)
+                predict(sub=sub, title=title, body="\n".join(body_lines), body_file=None,
+                        post_id=None, url=None, model=None, effort=None)
+            elif choice == "2":
+                predict(sub=None, title=None, body="", body_file=None, post_id=None,
+                        url=typer.prompt("Reddit post URL").strip(), model=None, effort=None)
+            elif choice == "3":
+                predict(sub=None, title=None, body="", body_file=None,
+                        post_id=typer.prompt("Post id (base36)").strip(), url=None,
+                        model=None, effort=None)
+            elif choice in ("4", "q", "quit", "exit"):
+                raise typer.Exit()
+            else:
+                typer.secho(f"Unknown choice: {choice}", fg="yellow")
+        except typer.Exit:
+            raise
+        except (typer.BadParameter, Exception) as e:  # keep the loop alive on errors
+            typer.secho(f"error: {e}", fg="red")
 
 
 @app.command()
@@ -152,10 +204,15 @@ def predict(
     elif post_id:
         raw_row = store.query("SELECT * FROM posts WHERE id = ?", [post_id]).df()
         if raw_row.empty:
-            raise typer.BadParameter(f"post {post_id} not in db")
-        d = raw_row.iloc[0].to_dict()
-        record = PostRecord(**{k: d[k] for k in PostRecord.__dataclass_fields__})
+            from modcast.fetch import post_by_id
+
+            typer.echo(f"[{post_id} not in local corpus — fetching from reddit/archive]")
+            record = normalize(post_by_id(post_id))
+        else:
+            d = raw_row.iloc[0].to_dict()
+            record = PostRecord(**{k: d[k] for k in PostRecord.__dataclass_fields__})
         sub = record.subreddit
+        typer.echo(f"[r/{sub} post {record.id}: {record.title!r}]")
     else:
         if title is None or sub is None:
             raise typer.BadParameter("--sub and --title required (or use --url / --post-id)")

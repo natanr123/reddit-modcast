@@ -174,13 +174,17 @@ def post_id_from_url(url: str) -> str:
 
 
 def post_from_url(url: str) -> dict[str, Any]:
-    """Fetch one post's raw JSON given any reddit post URL.
+    """Fetch one post's raw JSON given any reddit post URL."""
+    return post_by_id(post_id_from_url(url))
+
+
+def post_by_id(pid: str) -> dict[str, Any]:
+    """Fetch one post's raw JSON by base36 id.
 
     reddit's public .json endpoint first (freshest); when the post is already
     removed/deleted there (or the request fails), fall back to the Arctic
     Shift archive, which preserves the pre-removal text.
     """
-    pid = post_id_from_url(url)
     raw: dict[str, Any] | None = None
     try:
         r = httpx.get(
