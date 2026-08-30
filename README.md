@@ -105,6 +105,9 @@ outperform the teams that accumulate.
 
 ## Reproduction (from a clean machine)
 
+> Full step-by-step guide with expected outputs, per-claim reproduction commands, runtime
+> and cost tables: **[REPRODUCTION.md](REPRODUCTION.md)**. The short version:
+
 ```bash
 git clone <this repo> && cd reddit-modcast
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"   # Python ≥3.11 (built on 3.14)
@@ -177,4 +180,5 @@ Built with **Claude Code (Fable 5)** — including parallel subagent workflows f
 construction and detached overnight evaluation runs — with the **Codex CLI** (`gpt-5.6-sol`)
 as a flat-rate inference backend for test iterations. Coding-agent use is required by this
 challenge and fully embraced: the solution's own agent trajectories (every LLM call, tool
-invocation, and verification round) are logged as JSONL and ship in `results/trajectories/`.
+invocation, and verification round) are logged as JSONL — see **[TRAJECTORIES.md](TRAJECTORIES.md)**
+for the per-agent map and an annotated walkthrough, with curated files in `results/trajectories/`.
