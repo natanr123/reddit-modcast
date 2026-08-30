@@ -1,0 +1,172 @@
+{
+ "summary": {
+  "posts": 20,
+  "reps": 5,
+  "median_std": 0.0164,
+  "median_spread": 0.0425,
+  "mean_pairwise_diff": 0.0467,
+  "max_spread": 0.42
+ },
+ "per_post": [
+  {
+   "id": "1vck9ap",
+   "k": 5,
+   "mean_p": 0.556,
+   "std": 0.0418,
+   "spread": 0.12,
+   "mean_pairwise_diff": 0.058
+  },
+  {
+   "id": "1vda3m8",
+   "k": 5,
+   "mean_p": 0.75,
+   "std": 0.1502,
+   "spread": 0.42,
+   "mean_pairwise_diff": 0.208
+  },
+  {
+   "id": "1vfekma",
+   "k": 5,
+   "mean_p": 0.528,
+   "std": 0.0508,
+   "spread": 0.14,
+   "mean_pairwise_diff": 0.07
+  },
+  {
+   "id": "1vh2ygf",
+   "k": 5,
+   "mean_p": 0.406,
+   "std": 0.0185,
+   "spread": 0.05,
+   "mean_pairwise_diff": 0.026
+  },
+  {
+   "id": "1vpdyld",
+   "k": 5,
+   "mean_p": 0.434,
+   "std": 0.015,
+   "spread": 0.04,
+   "mean_pairwise_diff": 0.02
+  },
+  {
+   "id": "1vdjd0y",
+   "k": 5,
+   "mean_p": 0.112,
+   "std": 0.0075,
+   "spread": 0.02,
+   "mean_pairwise_diff": 0.01
+  },
+  {
+   "id": "1vr0mqa",
+   "k": 5,
+   "mean_p": 0.093,
+   "std": 0.0117,
+   "spread": 0.035,
+   "mean_pairwise_diff": 0.014
+  },
+  {
+   "id": "1vr2hqb",
+   "k": 5,
+   "mean_p": 0.11,
+   "std": 0.021,
+   "spread": 0.05,
+   "mean_pairwise_diff": 0.028
+  },
+  {
+   "id": "1vs4osh",
+   "k": 5,
+   "mean_p": 0.106,
+   "std": 0.0073,
+   "spread": 0.02,
+   "mean_pairwise_diff": 0.009
+  },
+  {
+   "id": "1vyg3rz",
+   "k": 5,
+   "mean_p": 0.07,
+   "std": 0.0152,
+   "spread": 0.045,
+   "mean_pairwise_diff": 0.021
+  },
+  {
+   "id": "1vlqaji",
+   "k": 5,
+   "mean_p": 0.124,
+   "std": 0.012,
+   "spread": 0.03,
+   "mean_pairwise_diff": 0.016
+  },
+  {
+   "id": "1vnkcd1",
+   "k": 5,
+   "mean_p": 0.114,
+   "std": 0.0102,
+   "spread": 0.03,
+   "mean_pairwise_diff": 0.014
+  },
+  {
+   "id": "1voe3op",
+   "k": 5,
+   "mean_p": 0.14,
+   "std": 0.0155,
+   "spread": 0.04,
+   "mean_pairwise_diff": 0.018
+  },
+  {
+   "id": "1vor7np",
+   "k": 5,
+   "mean_p": 0.162,
+   "std": 0.0147,
+   "spread": 0.04,
+   "mean_pairwise_diff": 0.02
+  },
+  {
+   "id": "1vqvdxi",
+   "k": 5,
+   "mean_p": 0.075,
+   "std": 0.0134,
+   "spread": 0.035,
+   "mean_pairwise_diff": 0.018
+  },
+  {
+   "id": "1vel7z2",
+   "k": 5,
+   "mean_p": 0.898,
+   "std": 0.0995,
+   "spread": 0.26,
+   "mean_pairwise_diff": 0.108
+  },
+  {
+   "id": "1vhwkap",
+   "k": 5,
+   "mean_p": 0.814,
+   "std": 0.055,
+   "spread": 0.16,
+   "mean_pairwise_diff": 0.074
+  },
+  {
+   "id": "1vqaxrc",
+   "k": 5,
+   "mean_p": 0.702,
+   "std": 0.0682,
+   "spread": 0.15,
+   "mean_pairwise_diff": 0.088
+  },
+  {
+   "id": "1vr94u0",
+   "k": 5,
+   "mean_p": 0.706,
+   "std": 0.0174,
+   "spread": 0.04,
+   "mean_pairwise_diff": 0.022
+  },
+  {
+   "id": "1vtznqp",
+   "k": 5,
+   "mean_p": 0.424,
+   "std": 0.0662,
+   "spread": 0.18,
+   "mean_pairwise_diff": 0.092
+  }
+ ]
+}

@@ -53,7 +53,10 @@ class ArcticShiftClient:
             if resp.status_code == 429:
                 time.sleep(float(resp.headers.get("X-RateLimit-Reset", "10")) + 1)
                 continue
-            if resp.status_code >= 500 and attempts < MAX_RETRIES:
+            # 5xx are obvious retries; 422 is ALSO transient on this API — the
+            # same request succeeds moments later (observed live), so back off
+            # and retry before treating it as a real client error.
+            if resp.status_code in (422, *range(500, 600)) and attempts < MAX_RETRIES:
                 attempts += 1
                 time.sleep(2**attempts)
                 continue

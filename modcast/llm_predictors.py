@@ -172,3 +172,58 @@ class AgentPredictor:
     def predict_proba(self, records: list[PostRecord]) -> np.ndarray:
         with ThreadPoolExecutor(max_workers=CONCURRENCY) as ex:
             return np.array(list(ex.map(self._one, records)))
+
+
+class InformedOneShotPredictor(OneShotPredictor):
+    """Ablation rung between the chatbot and the agent: ONE call, no tools,
+    but the prompt includes the context a maximally diligent user could
+    assemble — the subreddit's measured base rate and its published rules.
+    Isolates how much of the agent's gap is information access vs the
+    investigation loop itself. (The induced rulebook is deliberately NOT
+    included: it is a system component, not user-accessible context.)
+    """
+
+    name = "llm_oneshot_informed"
+
+    def __init__(self, run_id: str, con, model: str | None = None):
+        super().__init__(run_id, model=model)
+        self.cache = PredictionCache(self.name, model, None)
+        self.con = con
+        self._ctx: dict[str, str] = {}
+
+    def _context(self, subreddit: str) -> str:
+        if subreddit not in self._ctx:
+            from modcast import stats as S
+
+            # duckdb connections are not thread-safe; a cursor per call is
+            base = S.removal_rate(self.con.cursor(), subreddit, window=index_window(subreddit))
+            self._ctx[subreddit] = (
+                f"Context you may use:\n- Historical removal rate among moderation-decided "
+                f"posts in r/{subreddit}: {base['rate']:.1%} (n={base['n']}).\n"
+                f"- Published subreddit rules:\n{rules_digest(subreddit)}\n\n"
+            )
+        return self._ctx[subreddit]
+
+    def _one(self, r: PostRecord) -> float:
+        hit = self.cache.get(r.id)
+        if hit is not None:
+            return float(hit["p"])
+        session = LLMSession(
+            run_id=self.run_id, name=f"oneshot-informed-{r.id}",
+            **({"model": self.model} if self.model else {}),
+        )
+        prompt = (
+            f"Estimate the probability (0..1) that this Reddit post will be removed "
+            f"by moderation (mods, automod, or admins — not author deletion) within "
+            f"36 hours of being posted in r/{r.subreddit}.\n\n"
+            + self._context(r.subreddit)
+            + f"TITLE: {r.title}\nBODY:\n{r.selftext[:4000]}\n\n"
+            f"Respond with JSON: p_removed and one-sentence reasoning."
+        )
+        try:
+            resp = session.step(prompt, max_tokens=2000, output_format=ONESHOT_SCHEMA)
+            p = float(min(1.0, max(0.0, json.loads(text_of(resp))["p_removed"])))
+            self.cache.put(r.id, {"p": p})
+            return p
+        except Exception:
+            return 0.5

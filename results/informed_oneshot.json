@@ -1,0 +1,72 @@
+{
+ "metrics": {
+  "brier": 0.1887271733333333,
+  "auc": 0.8213355378192242,
+  "log_loss": 0.5659465196208738,
+  "ece": 0.14741333333333334,
+  "n": 600,
+  "base_rate": 0.37166666666666665
+ },
+ "comparisons": [
+  {
+   "a": "base_rate",
+   "b": "llm_oneshot_informed",
+   "brier_a": 0.1899,
+   "brier_b": 0.1887,
+   "advantage_a": -0.0012,
+   "ci95": [
+    -0.019,
+    0.0165
+   ],
+   "p_a_not_better": 0.5458
+  },
+  {
+   "a": "logistic",
+   "b": "llm_oneshot_informed",
+   "brier_a": 0.1915,
+   "brier_b": 0.1887,
+   "advantage_a": -0.0028,
+   "ci95": [
+    -0.0199,
+    0.0141
+   ],
+   "p_a_not_better": 0.6224
+  },
+  {
+   "a": "logistic+isotonic",
+   "b": "llm_oneshot_informed",
+   "brier_a": 0.1636,
+   "brier_b": 0.1887,
+   "advantage_a": 0.0251,
+   "ci95": [
+    0.0032,
+    0.0467
+   ],
+   "p_a_not_better": 0.0123
+  },
+  {
+   "a": "llm_oneshot",
+   "b": "llm_oneshot_informed",
+   "brier_a": 0.1845,
+   "brier_b": 0.1887,
+   "advantage_a": 0.0042,
+   "ci95": [
+    -0.0174,
+    0.0259
+   ],
+   "p_a_not_better": 0.3512
+  },
+  {
+   "a": "modcast_agent",
+   "b": "llm_oneshot_informed",
+   "brier_a": 0.1277,
+   "brier_b": 0.1887,
+   "advantage_a": 0.061,
+   "ci95": [
+    0.0455,
+    0.0768
+   ],
+   "p_a_not_better": 0.0
+  }
+ ]
+}
