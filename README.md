@@ -129,9 +129,11 @@ export ANTHROPIC_API_KEY=sk-ant-...          # LLM stages (or copy .env.example 
 - **Determinism:** all sampling is seeded (`RANDOM_SEED` in `modcast/config.py`); exact dep
   versions in `requirements.lock.txt`; the corpus refetches reproducibly (we deleted ours
   and refetched: counts matched within ±2 posts per subreddit).
-- **Cost/runtime:** headline agent eval ≈ $0.08/post at claude-sonnet-5 high effort;
-  our reported n=600 runs used the flat-rate `codex` CLI backend (`LLM_MODEL=codex-cli
-  gpt-5.6-sol medium` in `.env`) — both backends drive identical code paths.
+- **Cost/runtime:** a single forecast on the judge default (claude-opus-5, high effort)
+  measures **~$0.14 and ~60 s** (verified from a clean clone); ≈ $0.08/post at
+  claude-sonnet-5. Our reported n=600 runs used the flat-rate `codex` CLI backend
+  (`LLM_MODEL=codex-cli gpt-5.6-sol medium` in `.env`) — both backends drive identical
+  code paths.
 - Optional extra: `pip install -e ".[embed]"` + `MODCAST_RETRIEVER=dense` reproduces the
   dense-retrieval ablation (torch; not needed otherwise).
 
