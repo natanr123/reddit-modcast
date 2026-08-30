@@ -108,6 +108,7 @@ outperform the teams that accumulate.
 ```bash
 git clone <this repo> && cd reddit-modcast
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"   # Python ≥3.11 (built on 3.14)
+#   Debian/Ubuntu: if venv creation fails, `sudo apt install python3-venv` first
 .venv/bin/pytest -q                     # 40 unit tests, no network, no keys
 
 # data: fetched from the public Arctic Shift API (never redistributed here)
